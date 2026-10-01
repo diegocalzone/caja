@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caja</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<script>window.msal || document.write('<script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"><\/script>');</script>
+<style>
+:root{
+  --bg:#f5f5f4;--card:#fff;--text:#111;--muted:#6b6b6b;--line:#e2e2e0;
+  --green:#15803d;--green-bg:#e8f5ec;--red:#c62828;--red-bg:#fdecec;--btn:#111;--btn-text:#fff;
+}
+:root[data-theme="dark"]{
+  --bg:#121212;--card:#1d1d1d;--text:#f2f2f2;--muted:#a0a0a0;--line:#333;
+  --green:#4ade80;--green-bg:#16281c;--red:#f87171;--red-bg:#2e1616;--btn:#f2f2f2;--btn-text:#111;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:17px;margin:0}
+header .right{display:flex;gap:8px;align-items:center}
+main{max-width:760px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 12px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:8px 12px}
+button.primary{background:var(--btn);color:var(--btn-text);border-color:var(--btn);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+.small{font-size:13px;padding:6px 10px}
+.link{border:none;background:none;color:var(--muted);text-decoration:underline;padding:4px}
+.tipo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.tipo button{padding:14px;font-size:17px;font-weight:700;border-width:2px}
+.tipo .ing{color:var(--green);border-color:var(--green)}
+.tipo .sal{color:var(--red);border-color:var(--red)}
+.tipo .ing.on{background:var(--green);color:#fff}
+.tipo .sal.on{background:var(--red);color:#fff}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.quick button{font-size:13px;padding:6px 10px;border-radius:16px}
+.ac{position:relative}
+.sug{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:2px;max-height:240px;overflow:auto;display:none}
+.sug div{padding:10px;cursor:pointer;border-bottom:1px solid var(--line)}
+.sug div:last-child{border-bottom:none}
+.sug div.act,.sug div:hover{background:var(--bg)}
+#guardar{width:100%;margin-top:16px;padding:14px;font-size:17px}
+.msg{margin-top:10px;padding:10px;border-radius:8px;display:none;white-space:pre-wrap}
+.msg.ok{display:block;background:var(--green-bg);color:var(--green);font-weight:600}
+.msg.err{display:block;background:var(--red-bg);color:var(--red)}
+.msg.info{display:block;background:var(--bg);color:var(--muted)}
+.total{font-size:28px;font-weight:700}
+.cajas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
+.cajas div{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cajas span{display:block;font-size:12px;color:var(--muted)}
+.alert{margin-top:10px;padding:10px;border-radius:8px;background:var(--red-bg);color:var(--red);font-weight:600}
+.neg{color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600}
+td.n,th.n{text-align:right}
+td.c{white-space:normal}
+.in{color:var(--green)}.out{color:var(--red)}
+.scroll{overflow-x:auto}
+.hide{display:none!important}
+.files button{display:block;width:100%;text-align:left;margin-top:6px}
+.muted{color:var(--muted);font-size:13px}
+@media(max-width:520px){.hide-m{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Caja</h1>
+  <div class="right">
+    <span id="user" class="muted"></span>
+    <button id="btnTheme" class="small" title="Modo oscuro">◐</button>
+    <button id="btnLogout" class="small hide">Salir</button>
+  </div>
+</header>
+
+<main>
+  <!-- LOGIN -->
+  <section id="vLogin" class="card hide">
+    <h2>Iniciar sesión</h2>
+    <p class="muted">Ingresá con tu cuenta Microsoft para acceder al Excel en OneDrive.</p>
+    <button id="btnLogin" class="primary">Iniciar sesión con Microsoft</button>
+    <div id="loginMsg" class="msg"></div>
+  </section>
+
+  <!-- ELEGIR ARCHIVO -->
+  <section id="vFile" class="card hide">
+    <h2>Elegir archivo</h2>
+    <p class="muted">Se elige una sola vez; la app recuerda el archivo.</p>
+    <div class="row2" style="grid-template-columns:1fr auto">
+      <input id="fileQuery" value="planilla-de-excel-para-flujo-de-caja">
+      <button id="btnSearch" class="primary">Buscar</button>
+    </div>
+    <div id="fileList" class="files"></div>
+    <div id="fileMsg" class="msg"></div>
+  </section>
+
+  <!-- APP -->
+  <section id="vApp" class="hide" style="display:grid;gap:16px">
+    <div class="card">
+      <div class="tipo">
+        <button id="tIng" class="ing on" type="button">+ Ingreso</button>
+        <button id="tSal" class="sal" type="button">− Salida</button>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="fFecha">Fecha</label>
+          <input id="fFecha" type="date">
+        </div>
+        <div>
+          <label for="fCaja">Caja</label>
+          <select id="fCaja"></select>
+        </div>
+      </div>
+      <label for="fConcepto">Concepto</label>
+      <div class="ac">
+        <input id="fConcepto" autocomplete="off" placeholder="Ej: Ventas">
+        <div id="sug" class="sug"></div>
+      </div>
+      <div class="quick">
+        <button type="button" data-c="Ventas">Ventas</button>
+        <button type="button" data-c="Retiro Diego">Retiro Diego</button>
+        <button type="button" data-c="Depósito banco">Depósito banco</button>
+        <button type="button" data-c="Reasignación cajas">Reasignación cajas</button>
+      </div>
+      <label for="fImporte">Importe</label>
+      <input id="fImporte" inputmode="decimal" placeholder="Ej: 150.000,50">
+      <button id="guardar" class="primary">Guardar</button>
+      <div id="saveMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Saldos</h2>
+      <div class="muted">Saldo total</div>
+      <div id="sTotal" class="total">—</div>
+      <div id="sAlert"></div>
+      <div id="sCajas" class="cajas"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0">Últimos movimientos</h2>
+        <button id="btnRefresh" class="small">Actualizar</button>
+      </div>
+      <div id="loadMsg" class="msg"></div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Fecha</th><th>Concepto</th><th>Caja</th><th class="n">Entrada</th><th class="n">Salida</th><th class="n">Saldo</th></tr></thead>
+          <tbody id="tMov"></tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin:12px 0 0">Archivo: <span id="fileName"></span> · <button id="btnChangeFile" class="link">Cambiar archivo</button></p>
+    </div>
+  </section>
+</main>
+
+<script>
+/* =====================================================================
+   CONFIGURACIÓN — COMPLETAR
+   ===================================================================== */
+const CLIENT_ID = "PEGAR-ACA-EL-CLIENT-ID-DE-AZURE";   // Application (client) ID de la app registrada en Azure
+/* ===================================================================== */
+
+const SHEET = "Detalle Movimientos";
+const FIRST_ROW = 9;
+const SCOPES = ["Files.ReadWrite", "User.Read"];
+const GRAPH = "https://graph.microsoft.com/v1.0";
+const LS_FILE = "caja_file_id", LS_FILENAME = "caja_file_name", LS_THEME = "caja_theme";
+
+const $ = id => document.getElementById(id);
+const state = { tipo: "ing", cajas: [], min: 0, max: 0, moves: [], concepts: [], fileId: null, busy: false };
+
+/* ---------- Tema ---------- */
+function setTheme(t){ document.documentElement.dataset.theme = t; try{ localStorage.setItem(LS_THEME, t); }catch(e){} }
+setTheme((()=>{ try{ return localStorage.getItem(LS_THEME); }catch(e){ return null; } })() ||
+  (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+$("btnTheme").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+
+/* ---------- Utilidades ---------- */
+const fmtMoney = n => "$ " + (Number(n)||0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const norm = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const num = v => (typeof v === "number" ? v : (v === "" || v == null ? 0 : Number(v) || 0));
+
+function todayISO(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function isoToSerial(iso){ const [y,m,d] = iso.split("-").map(Number); return Date.UTC(y, m-1, d) / 86400000 + 25569; }
+function serialToText(v){
+  if (typeof v !== "number") return esc(v);
+  const d = new Date(Math.round((v - 25569) * 86400000));
+  return String(d.getUTCDate()).padStart(2,"0") + "/" + String(d.getUTCMonth()+1).padStart(2,"0") + "/" + d.getUTCFullYear();
+}
+// Acepta "1.234.567,50", "1234567,5", "150.000", "1500.5"
+function parseImporte(s){
+  s = String(s).trim().replace(/\$|\s/g, "");
+  if (!s) return NaN;
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+  if (!/^\d+(\.\d+)?$/.test(s)) return NaN;
+  return Math.round(parseFloat(s) * 100) / 100;
+}
+function showMsg(el, type, text){ el.className = "msg " + type; el.textContent = text; }
+function hideMsg(el){ el.className = "msg"; el.textContent = ""; }
+function show(view){ ["vLogin","vFile","vApp"].forEach(v => $(v).classList.toggle("hide", v !== view)); }
+
+/* ---------- Autenticación (MSAL) ---------- */
+let msalApp = null;
+
+function account(){ return msalApp.getActiveAccount() || msalApp.getAllAccounts()[0] || null; }
+
+async function getToken(){
+  const acc = account();
+  if (!acc) throw new Error("No hay sesión iniciada.");
+  try {
+    return (await msalApp.acquireTokenSilent({ scopes: SCOPES, account: acc })).accessToken;
+  } catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) return (await msalApp.acquireTokenPopup({ scopes: SCOPES, account: acc })).accessToken;
+    throw e;
+  }
+}
+
+$("btnLogin").onclick = async () => {
+  hideMsg($("loginMsg"));
+  try {
+    const r = await msalApp.loginPopup({ scopes: SCOPES });
+    msalApp.setActiveAccount(r.account);
+    start();
+  } catch (e) { showMsg($("loginMsg"), "err", "No se pudo iniciar sesión: " + (e.message || e)); }
+};
+$("btnLogout").onclick = () => msalApp.logoutPopup({ account: account() }).then(() => location.reload());
+
+/* ---------- Graph ---------- */
+async function graph(path, { method = "GET", body, session } = {}, retry = true){
+  const headers = { Authorization: "Bearer " + await getToken() };
+  if (body) headers["Content-Type"] = "application/json";
+  if (session) headers["workbook-session-id"] = session;
+  const res = await fetch(path.startsWith("http") ? path : GRAPH + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if ((res.status === 429 || res.status === 503 || res.status === 504) && retry) {
+    await new Promise(r => setTimeout(r, (Number(res.headers.get("Retry-After")) || 2) * 1000));
+    return graph(path, { method, body, session }, false);
+  }
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(`Error ${res.status}: ${data?.error?.message || res.statusText}`);
+  return data;
+}
+const wb = () => `/me/drive/items/${state.fileId}/workbook`;
+const ws = () => `${wb()}/worksheets('${encodeURIComponent(SHEET)}')`;
+const rng = addr => `${ws()}/range(address='${addr}')`;
+const lastRowOf = address => Number(address.split(":").pop().replace(/[^0-9]/g, ""));
+
+/* ---------- Elegir archivo ---------- */
+$("btnSearch").onclick = async () => {
+  const q = $("fileQuery").value.trim();
+  $("fileList").innerHTML = ""; showMsg($("fileMsg"), "info", "Buscando…");
+  try {
+    const r = await graph(`/me/drive/root/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$select=id,name,parentReference,lastModifiedDateTime`);
+    const files = (r.value || []).filter(f => /\.xlsx$/i.test(f.name));
+    if (!files.length) { showMsg($("fileMsg"), "err", "No se encontró ningún .xlsx con ese nombre en tu OneDrive."); return; }
+    hideMsg($("fileMsg"));
+    files.forEach(f => {
+      const b = document.createElement("button");
+      b.innerHTML = `<b>${esc(f.name)}</b><br><span class="muted">${esc(f.parentReference?.path?.replace("/drive/root:", "") || "/")} · ${new Date(f.lastModifiedDateTime).toLocaleString("es-AR")}</span>`;
+      b.onclick = () => { try{ localStorage.setItem(LS_FILE, f.id); localStorage.setItem(LS_FILENAME, f.name); }catch(e){} state.fileId = f.id; openApp(); };
+      $("fileList").appendChild(b);
+    });
+  } catch (e) { showMsg($("fileMsg"), "err", e.message); }
+};
+$("btnChangeFile").onclick = () => { try{ localStorage.removeItem(LS_FILE); }catch(e){} state.fileId = null; show("vFile"); };
+
+/* ---------- Lectura del Excel ---------- */
+async function loadData(){
+  showMsg($("loadMsg"), "info", "Leyendo Excel…");
+  $("btnRefresh").disabled = true;
+  try {
+    const [cajas, params, used] = await Promise.all([
+      graph(rng("J9:K14") + "?$select=values"),
+      graph(rng("K4:K5") + "?$select=values"),
+      graph(`${ws()}/usedRange(valuesOnly=true)?$select=address`)
+    ]);
+    state.cajas = cajas.values.filter(r => r[0] !== "" && r[1] !== "").map(r => ({ cod: num(r[0]), nombre: String(r[1]) }));
+    state.min = num(params.values[0][0]); state.max = num(params.values[1][0]);
+
+    const last = Math.max(lastRowOf(used.address), FIRST_ROW);
+    const data = await graph(rng(`B${FIRST_ROW}:G${last}`) + "?$select=values");
+    state.moves = [];
+    data.values.forEach((r, i) => {
+      if (r.slice(0, 5).every(v => v === "" || v == null)) return;
+      state.moves.push({ row: FIRST_ROW + i, fecha: r[0], concepto: r[1], caja: r[2], e: num(r[3]), f: num(r[4]), saldo: r[5] });
+    });
+    buildConcepts(); fillCajas(); render();
+    hideMsg($("loadMsg"));
+  } catch (e) {
+    showMsg($("loadMsg"), "err", "No se pudo leer el Excel.\n" + e.message);
+  } finally { $("btnRefresh").disabled = false; }
+}
+$("btnRefresh").onclick = loadData;
+
+function fillCajas(){
+  const sel = $("fCaja"), prev = sel.value;
+  sel.innerHTML = state.cajas.map(c => `<option value="${c.cod}">${c.cod} = ${esc(c.nombre)}</option>`).join("");
+  sel.value = prev && state.cajas.some(c => String(c.cod) === prev) ? prev : "1";
+}
+function cajaName(cod){ const c = state.cajas.find(c => c.cod === num(cod)); return c ? c.nombre : (cod === "" ? "—" : "Caja " + cod); }
+
+function buildConcepts(){
+  const m = new Map();
+  state.moves.forEach(mv => {
+    const t = String(mv.concepto || "").trim(); if (!t) return;
+    const k = norm(t), o = m.get(k) || { text: t, n: 0 }; o.n++; m.set(k, o);
+  });
+  state.concepts = [...m.values()].sort((a, b) => b.n - a.n);
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const per = new Map(); let total = 0;
+  state.cajas.forEach(c => per.set(c.cod, 0));
+  state.moves.forEach(m => { const v = m.e - m.f; total += v; const k = num(m.caja); per.set(k, (per.get(k) || 0) + v); });
+
+  $("sTotal").textContent = fmtMoney(total);
+  $("sTotal").classList.toggle("neg", total < 0);
+  let alert = "";
+  if (total > state.max) alert = "Se superó el máximo para mantener en caja";
+  else if (total < state.min) alert = "La caja está por debajo del mínimo a mantener";
+  $("sAlert").innerHTML = alert ? `<div class="alert">${alert}</div>` : "";
+  $("sCajas").innerHTML = [...per.entries()].map(([cod, v]) =>
+    `<div><span>${cod} · ${esc(cajaName(cod))}</span><b class="${v < 0 ? "neg" : ""}">${fmtMoney(v)}</b></div>`).join("");
+
+  $("tMov").innerHTML = state.moves.slice(-20).reverse().map(m => `<tr>
+    <td>${serialToText(m.fecha)}</td><td class="c">${esc(m.concepto)}</td><td>${esc(cajaName(m.caja))}</td>
+    <td class="n in">${m.e ? fmtMoney(m.e) : ""}</td><td class="n out">${m.f ? fmtMoney(m.f) : ""}</td>
+    <td class="n">${typeof m.saldo === "number" ? fmtMoney(m.saldo) : esc(m.saldo)}</td></tr>`).join("");
+}
+
+/* ---------- Formulario ---------- */
+function setTipo(t){ state.tipo = t; $("tIng").classList.toggle("on", t === "ing"); $("tSal").classList.toggle("on", t === "sal"); }
+$("tIng").onclick = () => setTipo("ing");
+$("tSal").onclick = () => setTipo("sal");
+document.querySelectorAll(".quick button").forEach(b => b.onclick = () => { $("fConcepto").value = b.dataset.c; hideSug(); $("fImporte").focus(); });
+
+// Autocompletado (sin distinguir mayúsculas ni tildes)
+let sugIdx = -1;
+function hideSug(){ $("sug").style.display = "none"; sugIdx = -1; }
+function updateSug(){
+  const q = norm($("fConcepto").value);
+  if (!q) return hideSug();
+  const starts = [], contains = [];
+  for (const c of state.concepts) { const k = norm(c.text); if (k === q) continue; if (k.startsWith(q)) starts.push(c); else if (k.includes(q)) contains.push(c); }
+  const list = starts.concat(contains).slice(0, 8);
+  if (!list.length) return hideSug();
+  $("sug").innerHTML = list.map(c => `<div data-v="${esc(c.text)}">${esc(c.text)}</div>`).join("");
+  $("sug").style.display = "block"; sugIdx = -1;
+}
+$("fConcepto").addEventListener("input", updateSug);
+$("fConcepto").addEventListener("blur", () => setTimeout(hideSug, 150));
+$("sug").addEventListener("mousedown", e => { const d = e.target.closest("div[data-v]"); if (d) { $("fConcepto").value = d.dataset.v; hideSug(); } });
+$("fConcepto").addEventListener("keydown", e => {
+  const items = [...$("sug").querySelectorAll("div")];
+  if ($("sug").style.display !== "block" || !items.length) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); sugIdx = (sugIdx + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items.forEach((d, i) => d.classList.toggle("act", i === sugIdx));
+  } else if (e.key === "Enter" && sugIdx >= 0) { e.preventDefault(); $("fConcepto").value = items[sugIdx].dataset.v; hideSug(); }
+  else if (e.key === "Escape") hideSug();
+});
+
+/* ---------- Guardar en Excel ---------- */
+$("guardar").onclick = save;
+$("fImporte").addEventListener("keydown", e => { if (e.key === "Enter") save(); });
+
+async function save(){
+  if (state.busy) return;
+  const msg = $("saveMsg");
+  const fecha = $("fFecha").value, concepto = $("fConcepto").value.trim(), caja = Number($("fCaja").value), importe = parseImporte($("fImporte").value);
+  if (!fecha) return showMsg(msg, "err", "Falta la fecha.");
+  if (!concepto) return showMsg(msg, "err", "Falta el concepto.");
+  if (!caja) return showMsg(msg, "err", "Falta la caja.");
+  if (!(importe > 0)) return showMsg(msg, "err", "Importe inválido. Usá solo números positivos, ej: 150.000,50");
+
+  state.busy = true; $("guardar").disabled = true; showMsg(msg, "info", "Guardando…");
+  const serial = isoToSerial(fecha);
+  const e = state.tipo === "ing" ? importe : "", f = state.tipo === "sal" ? importe : "";
+  const conceptoCell = /^[=+\-@]/.test(concepto) ? "'" + concepto : concepto;
+  let session = null;
+
+  try {
+    session = (await graph(`${wb()}/createSession`, { method: "POST", body: { persistChanges: true } })).id;
+    const opt = { session };
+
+    // 1) Última fila con fecha en la columna B
+    const used = await graph(`${ws()}/usedRange(valuesOnly=true)?$select=address`, opt);
+    const lastUsed = Math.max(lastRowOf(used.address), FIRST_ROW);
+    const colB = (await graph(rng(`B${FIRST_ROW}:B${lastUsed}`) + "?$select=values", opt)).values;
+    let idx = colB.length - 1;
+    while (idx >= 0 && (colB[idx][0] === "" || colB[idx][0] == null)) idx--;
+    const n = FIRST_ROW + idx + 1;
+
+    // 2) Seguridad: la fila destino tiene que estar vacía en B:F
+    const target = (await graph(rng(`B${n}:G${n}`) + "?$select=values,formulas", opt));
+    if (target.values[0].slice(0, 5).some(v => v !== "" && v != null)) throw new Error(`La fila ${n} ya tiene datos. No se escribió nada.`);
+
+    // 3) Escribir B:F (fecha como número de serie con formato dd/mm/yyyy)
+    await graph(rng(`B${n}:F${n}`), { method: "PATCH", session, body: {
+      values: [[serial, conceptoCell, caja, e, f]],
+      numberFormat: [["dd/mm/yyyy", null, null, null, null]]
+    }});
+
+    // 4) Fórmula de saldo en G solo si está vacía
+    if (n > FIRST_ROW && !String(target.formulas[0][5] || "").trim()) {
+      await graph(rng(`G${n}`), { method: "PATCH", session, body: { formulas: [[`=IF(D${n}="","",SUM(E${n}+G${n-1}-F${n}))`]] } });
+    }
+
+    // 5) Releer y confirmar
+    const check = (await graph(rng(`B${n}:G${n}`) + "?$select=values", opt)).values[0];
+    const ok = num(check[0]) === serial && String(check[1]) === concepto && num(check[2]) === caja && num(check[3]) === num(e) && num(check[4]) === num(f);
+    if (!ok) throw new Error(`La fila ${n} no quedó como se esperaba. Revisá el Excel.`);
+
+    state.moves.push({ row: n, fecha: check[0], concepto: check[1], caja: check[2], e: num(check[3]), f: num(check[4]), saldo: check[5] });
+    buildConcepts(); render();
+    $("fConcepto").value = ""; $("fImporte").value = "";
+    showMsg(msg, "ok", `Guardado en Excel ✓  (fila ${n})`);
+    $("fConcepto").focus();
+  } catch (err) {
+    showMsg(msg, "err", "No se guardó.\n" + (err.message || err));
+  } finally {
+    if (session) graph(`${wb()}/closeSession`, { method: "POST", session }).catch(() => {});
+    state.busy = false; $("guardar").disabled = false;
+  }
+}
+
+/* ---------- Inicio ---------- */
+function openApp(){
+  $("fileName").textContent = (()=>{ try{ return localStorage.getItem(LS_FILENAME) || ""; }catch(e){ return ""; } })();
+  show("vApp"); loadData();
+}
+function start(){
+  const acc = account();
+  if (!acc) { show("vLogin"); return; }
+  msalApp.setActiveAccount(acc);
+  $("user").textContent = acc.username || ""; $("user").classList.add("hide-m");
+  $("btnLogout").classList.remove("hide");
+  try { state.fileId = localStorage.getItem(LS_FILE); } catch(e) {}
+  state.fileId ? openApp() : show("vFile");
+}
+
+$("fFecha").value = todayISO();
+(async () => {
+  const fail = t => { show("vLogin"); $("btnLogin").disabled = true; showMsg($("loginMsg"), "err", t); };
+  if (location.protocol === "file:") return fail("La app no funciona abriendo el archivo con doble clic. Abrila desde la URL de GitHub Pages (https://…github.io/…).");
+  if (CLIENT_ID.startsWith("PEGAR")) return fail("Falta completar CLIENT_ID al principio del código (el Application (client) ID de Azure).");
+  if (!window.msal) return fail("No se pudo cargar la librería de Microsoft (MSAL). Revisá la conexión o si algún bloqueador de anuncios está bloqueando cdn.jsdelivr.net / unpkg.com.");
+  try {
+    msalApp = new msal.PublicClientApplication({
+      auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: location.origin + location.pathname },
+      cache: { cacheLocation: "localStorage" }
+    });
+    if (msalApp.initialize) await msalApp.initialize();
+    await msalApp.handleRedirectPromise();
+  } catch (e) { return fail("Error al iniciar MSAL: " + (e.message || e)); }
+  try { start(); } catch (e) { fail("Error al iniciar: " + (e.message || e)); }
+})();
+</script>
+
+<!--
+=====================================================================
+PUESTA EN MARCHA
+=====================================================================
+
+1) REGISTRAR LA APP EN AZURE
+   a. Entrá a https://portal.azure.com con tu cuenta Microsoft (la misma del OneDrive).
+      Buscá "App registrations" (Registros de aplicaciones) → "New registration".
+   b. Name: Caja (o el que quieras).
+   c. Supported account types: "Personal Microsoft accounts only"
+      (Solo cuentas personales de Microsoft).
+   d. Redirect URI: plataforma "Single-page application (SPA)" y la URL
+      EXACTA de GitHub Pages, con la barra final. Ej:
+         https://TU-USUARIO.github.io/caja/
+   e. Register. Copiá el "Application (client) ID" y pegalo en la constante
+      CLIENT_ID al principio del <script>.
+   f. API permissions → Add a permission → Microsoft Graph → Delegated:
+         Files.ReadWrite
+         User.Read
+      (con cuenta personal no hace falta "admin consent"; se aceptan al
+      iniciar sesión la primera vez).
+   g. Si probás también en local (ej: http://localhost:8080/), agregá esa URL
+      como otra Redirect URI de tipo SPA.
+
+2) PUBLICAR EN GITHUB PAGES
+   a. En https://github.com → New repository → nombre "caja" → Public → Create.
+      (GitHub Pages gratis requiere repo público; el código no contiene
+      datos ni claves: el Client ID no es secreto).
+   b. "Add file" → "Upload files" → subí este index.html → Commit.
+   c. Settings → Pages → Source: "Deploy from a branch" → Branch: main / (root) → Save.
+   d. En 1–2 minutos queda en https://TU-USUARIO.github.io/caja/
+      Esa URL tiene que coincidir con la Redirect URI de Azure.
+   e. Abrila en el celular y "Agregar a pantalla de inicio" para usarla como app.
+
+3) PRIMER USO
+   Iniciar sesión → Buscar → elegir planilla-de-excel-para-flujo-de-caja.xlsx.
+   El ID del archivo queda guardado en el navegador de ese dispositivo.
+   Si el archivo está abierto en Excel de escritorio al mismo tiempo, los
+   cambios se sincronizan vía OneDrive (conviene tener AutoSave activado).
+=====================================================================
+-->
+</body>
+</html>
