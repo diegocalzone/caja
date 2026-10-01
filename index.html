@@ -450,6 +450,12 @@ function start(){
 
 $("fFecha").value = todayISO();
 (async () => {
+  // Si esta página se cargó dentro de la ventana emergente del login, no arrancar la app:
+  // la ventana principal lee la respuesta y la cierra sola.
+  if (window.opener && window.opener !== window && /^msal\./.test(window.name)) {
+    document.body.innerHTML = '<p style="padding:16px;font-family:system-ui">Iniciando sesión…</p>';
+    return;
+  }
   const fail = t => { show("vLogin"); $("btnLogin").disabled = true; showMsg($("loginMsg"), "err", t); };
   if (location.protocol === "file:") return fail("La app no funciona abriendo el archivo con doble clic. Abrila desde la URL de GitHub Pages (https://…github.io/…).");
   if (CLIENT_ID.startsWith("PEGAR")) return fail("Falta completar CLIENT_ID al principio del código (el Application (client) ID de Azure).");
