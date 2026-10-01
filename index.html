@@ -62,6 +62,10 @@ td.n,th.n{text-align:right}
 td.c{white-space:normal}
 .in{color:var(--green)}.out{color:var(--red)}
 .scroll{overflow-x:auto}
+#tMov tr{cursor:pointer}
+#tMov tr:hover td{background:var(--bg)}
+.editbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;padding:10px;border-radius:8px;background:#fff4d6;color:#7a5200;font-weight:600;font-size:14px}
+:root[data-theme="dark"] .editbar{background:#3a2f12;color:#ffd77a}
 .hide{display:none!important}
 .files button{display:block;width:100%;text-align:left;margin-top:6px}
 .muted{color:var(--muted);font-size:13px}
@@ -71,7 +75,7 @@ td.c{white-space:normal}
 <body>
 
 <header>
-  <h1>Caja <span class="muted" style="font-weight:400;font-size:12px">v4</span></h1>
+  <h1>Caja <span class="muted" style="font-weight:400;font-size:12px">v5</span></h1>
   <div class="right">
     <span id="user" class="muted"></span>
     <button id="btnTheme" class="small" title="Modo oscuro">◐</button>
@@ -103,6 +107,7 @@ td.c{white-space:normal}
   <!-- APP -->
   <section id="vApp" class="hide" style="display:grid;gap:16px">
     <div class="card">
+      <div id="editBar" class="editbar hide"><span id="editTxt"></span><button id="btnCancelEdit" type="button" class="small">Cancelar</button></div>
       <div class="tipo">
         <button id="tIng" class="ing on" type="button">+ Ingreso</button>
         <button id="tSal" class="sal" type="button">− Salida</button>
@@ -144,7 +149,7 @@ td.c{white-space:normal}
 
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="margin:0">Últimos movimientos</h2>
+        <h2 style="margin:0">Últimos movimientos <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· tocá uno para editarlo</span></h2>
         <button id="btnRefresh" class="small">Actualizar</button>
       </div>
       <div id="loadMsg" class="msg"></div>
@@ -173,7 +178,7 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 const LS_FILE = "caja_file_id", LS_FILENAME = "caja_file_name", LS_THEME = "caja_theme";
 
 const $ = id => document.getElementById(id);
-const state = { tipo: "ing", cajas: [], min: 0, max: 0, moves: [], concepts: [], fileId: null, busy: false };
+const state = { edit: null, tipo: "ing", cajas: [], min: 0, max: 0, moves: [], concepts: [], fileId: null, busy: false };
 
 /* ---------- Tema ---------- */
 function setTheme(t){ document.documentElement.dataset.theme = t; try{ localStorage.setItem(LS_THEME, t); }catch(e){} }
@@ -330,7 +335,8 @@ function render(){
   $("sCajas").innerHTML = [...per.entries()].map(([cod, v]) =>
     `<div><span>${cod} · ${esc(cajaName(cod))}</span><b class="${v < 0 ? "neg" : ""}">${fmtMoney(v)}</b></div>`).join("");
 
-  $("tMov").innerHTML = state.moves.slice(-20).reverse().map(m => `<tr>
+  const last20 = [...state.moves].sort((a, b) => (num(b.fecha) - num(a.fecha)) || (b.row - a.row)).slice(0, 20);
+  $("tMov").innerHTML = last20.map(m => `<tr data-row="${m.row}" title="Tocá para editar">
     <td>${serialToText(m.fecha)}</td><td class="c">${esc(m.concepto)}</td><td>${esc(cajaName(m.caja))}</td>
     <td class="n in">${m.e ? fmtMoney(m.e) : ""}</td><td class="n out">${m.f ? fmtMoney(m.f) : ""}</td>
     <td class="n">${typeof m.saldo === "number" ? fmtMoney(m.saldo) : esc(m.saldo)}</td></tr>`).join("");
@@ -368,9 +374,37 @@ $("fConcepto").addEventListener("keydown", e => {
   else if (e.key === "Escape") hideSug();
 });
 
+/* ---------- Edición ---------- */
+function startEdit(row){
+  const m = state.moves.find(x => x.row === row);
+  if (!m) return;
+  if (m.e && m.f) return showMsg($("saveMsg"), "err", `La fila ${row} tiene entrada y salida a la vez; editala en el Excel.`);
+  state.edit = m;
+  setTipo(m.f ? "sal" : "ing");
+  if (typeof m.fecha === "number") { const d = new Date(Math.round((m.fecha - 25569) * 86400000)); $("fFecha").value = d.toISOString().slice(0, 10); }
+  $("fConcepto").value = m.concepto;
+  if (state.cajas.some(c => c.cod === num(m.caja))) $("fCaja").value = String(num(m.caja));
+  $("fImporte").value = (m.e || m.f).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  $("editBar").classList.remove("hide");
+  $("editTxt").textContent = `Editando fila ${m.row}: ${serialToText(m.fecha)} · ${m.concepto}`;
+  $("guardar").textContent = "Guardar cambios";
+  hideMsg($("saveMsg"));
+  window.scrollTo({ top: 0 });
+}
+function endEdit(){
+  state.edit = null;
+  $("editBar").classList.add("hide");
+  $("guardar").textContent = "Guardar";
+}
+$("btnCancelEdit").onclick = () => { endEdit(); $("fConcepto").value = ""; $("fImporte").value = ""; hideMsg($("saveMsg")); };
+$("tMov").addEventListener("click", e => { const tr = e.target.closest("tr[data-row]"); if (tr && !state.busy) startEdit(Number(tr.dataset.row)); });
+
 /* ---------- Guardar en Excel ---------- */
 $("guardar").onclick = save;
 $("fImporte").addEventListener("keydown", e => { if (e.key === "Enter") save(); });
+
+const saldoFormula = n => n === FIRST_ROW ? `=E${n}-F${n}` : `=IF(D${n}="","",SUM(E${n}+G${n-1}-F${n}))`;
+const isEmpty = v => v === "" || v == null;
 
 async function save(){
   if (state.busy) return;
@@ -382,47 +416,91 @@ async function save(){
   if (!(importe > 0)) return showMsg(msg, "err", "Importe inválido. Usá solo números positivos, ej: 150.000,50");
 
   state.busy = true; $("guardar").disabled = true; showMsg(msg, "info", "Guardando…");
-  const serial = isoToSerial(fecha);
-  const e = state.tipo === "ing" ? importe : "", f = state.tipo === "sal" ? importe : "";
-  const conceptoCell = /^[=+\-@]/.test(concepto) ? "'" + concepto : concepto;
+  const v = {
+    serial: isoToSerial(fecha), concepto, caja,
+    e: state.tipo === "ing" ? importe : "", f: state.tipo === "sal" ? importe : "",
+    conceptoCell: /^[=+\-@]/.test(concepto) ? "'" + concepto : concepto
+  };
+  const edit = state.edit;
   let session = null;
 
   try {
     session = (await graph(`${wb()}/createSession`, { method: "POST", body: { persistChanges: true } })).id;
-    const opt = { session };
+    const S = { session };
+    const get = (addr, sel) => graph(rng(addr) + "?$select=" + sel, S);
+    const patch = (addr, body) => graph(rng(addr), { method: "PATCH", session, body });
+    const writeBF = n => patch(`B${n}:F${n}`, { values: [[v.serial, v.conceptoCell, v.caja, v.e, v.f]], numberFormat: [["dd/mm/yyyy", null, null, null, null]] });
+    const setG = n => patch(`G${n}`, { formulas: [[saldoFormula(n)]] });
+    const insertAt = n => graph(rng(`B${n}:G${n}`) + "/insert", { method: "POST", session, body: { shift: "Down" } });
+    const deleteAt = n => graph(rng(`B${n}:G${n}`) + "/delete", { method: "POST", session, body: { shift: "Up" } });
 
-    // 1) Última fila con fecha en la columna B
-    const used = await graph(`${ws()}/usedRange(valuesOnly=true)?$select=address`, opt);
-    const lastUsed = Math.max(lastRowOf(used.address), FIRST_ROW);
-    const colB = (await graph(rng(`B${FIRST_ROW}:B${lastUsed}`) + "?$select=values", opt)).values;
-    let idx = colB.length - 1;
-    while (idx >= 0 && (colB[idx][0] === "" || colB[idx][0] == null)) idx--;
-    const n = FIRST_ROW + idx + 1;
+    // Coloca el movimiento en orden de fecha (después de los de la misma fecha). Devuelve la fila.
+    async function place(excludeRow){
+      const used = await graph(`${ws()}/usedRange(valuesOnly=true)?$select=address`, S);
+      const lastUsed = Math.max(lastRowOf(used.address), FIRST_ROW);
+      const colB = (await get(`B${FIRST_ROW}:B${lastUsed}`, "values")).values.map(r => r[0]);
+      let last = colB.length - 1;
+      while (last >= 0 && isEmpty(colB[last])) last--;
+      let i = last;
+      while (i >= 0 && (FIRST_ROW + i === excludeRow || isEmpty(colB[i]) || num(colB[i]) > v.serial)) i--;
+      const k = FIRST_ROW + i + 1;
 
-    // 2) Seguridad: la fila destino tiene que estar vacía en B:F
-    const target = (await graph(rng(`B${n}:G${n}`) + "?$select=values,formulas", opt));
-    if (target.values[0].slice(0, 5).some(v => v !== "" && v != null)) throw new Error(`La fila ${n} ya tiene datos. No se escribió nada.`);
-
-    // 3) Escribir B:F (fecha como número de serie con formato dd/mm/yyyy)
-    await graph(rng(`B${n}:F${n}`), { method: "PATCH", session, body: {
-      values: [[serial, conceptoCell, caja, e, f]],
-      numberFormat: [["dd/mm/yyyy", null, null, null, null]]
-    }});
-
-    // 4) Fórmula de saldo en G solo si está vacía
-    if (n > FIRST_ROW && !String(target.formulas[0][5] || "").trim()) {
-      await graph(rng(`G${n}`), { method: "PATCH", session, body: { formulas: [[`=IF(D${n}="","",SUM(E${n}+G${n-1}-F${n}))`]] } });
+      if (i === last) {
+        // Va al final: escribir en la primera fila vacía, sin mover nada
+        const n = FIRST_ROW + last + 1;
+        const t = await get(`B${n}:G${n}`, "values,formulas");
+        if (t.values[0].slice(0, 5).some(x => !isEmpty(x))) throw new Error(`La fila ${n} ya tiene datos. No se escribió nada.`);
+        await writeBF(n);
+        if (!String(t.formulas[0][5] || "").trim()) await setG(n);
+        return { n, moved: false };
+      }
+      // Va en el medio: abrir lugar solo en B:G (no toca las columnas H en adelante)
+      await insertAt(k);
+      await writeBF(k);
+      await setG(k);
+      await setG(k + 1);
+      return { n: k, moved: true };
     }
 
-    // 5) Releer y confirmar
-    const check = (await graph(rng(`B${n}:G${n}`) + "?$select=values", opt)).values[0];
-    const ok = num(check[0]) === serial && String(check[1]) === concepto && num(check[2]) === caja && num(check[3]) === num(e) && num(check[4]) === num(f);
+    let n, moved = false;
+    if (!edit) {
+      ({ n, moved } = await place(null));
+    } else {
+      const r = edit.row;
+      const cur = (await get(`B${r}:F${r}`, "values")).values[0];
+      const same = num(cur[0]) === num(edit.fecha) && String(cur[1]) === String(edit.concepto) && num(cur[2]) === num(edit.caja) && num(cur[3]) === edit.e && num(cur[4]) === edit.f;
+      if (!same) throw new Error(`La fila ${r} cambió desde la última lectura. Tocá "Actualizar" y volvé a elegir el movimiento.`);
+
+      const nb = (await get(`B${Math.max(r - 1, FIRST_ROW)}:B${r + 1}`, "values")).values.map(x => x[0]);
+      const prev = r > FIRST_ROW ? nb[0] : "", next = nb[nb.length - 1];
+      const fits = (isEmpty(prev) || num(prev) <= v.serial) && (isEmpty(next) || num(next) >= v.serial);
+
+      if (fits) {
+        await writeBF(r); n = r;
+      } else {
+        // Cambió la fecha: primero se agrega en su lugar nuevo y después se borra la original (si algo falla no se pierde nada)
+        const p = await place(r);
+        const orig = p.moved && p.n <= r ? r + 1 : r;
+        await deleteAt(orig);
+        await setG(orig);
+        n = p.n > orig ? p.n - 1 : p.n;
+        moved = true;
+      }
+    }
+
+    // Releer y confirmar
+    const check = (await get(`B${n}:G${n}`, "values")).values[0];
+    const ok = num(check[0]) === v.serial && String(check[1]) === concepto && num(check[2]) === caja && num(check[3]) === num(v.e) && num(check[4]) === num(v.f);
     if (!ok) throw new Error(`La fila ${n} no quedó como se esperaba. Revisá el Excel.`);
 
-    state.moves.push({ row: n, fecha: check[0], concepto: check[1], caja: check[2], e: num(check[3]), f: num(check[4]), saldo: check[5] });
-    buildConcepts(); render();
+    if (!edit && !moved) {
+      state.moves.push({ row: n, fecha: check[0], concepto: check[1], caja: check[2], e: num(check[3]), f: num(check[4]), saldo: check[5] });
+      buildConcepts(); render();
+    }
     $("fConcepto").value = ""; $("fImporte").value = "";
-    showMsg(msg, "ok", `Guardado en Excel ✓  (fila ${n})`);
+    if (edit) endEdit();
+    showMsg(msg, "ok", `${edit ? "Cambios guardados" : "Guardado en Excel"} ✓  (fila ${n}${moved ? ", ordenado por fecha" : ""})`);
+    if (edit || moved) await loadData();
     $("fConcepto").focus();
   } catch (err) {
     showMsg(msg, "err", "No se guardó.\n" + (err.message || err));
