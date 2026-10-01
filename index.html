@@ -71,7 +71,7 @@ td.c{white-space:normal}
 <body>
 
 <header>
-  <h1>Caja</h1>
+  <h1>Caja <span class="muted" style="font-weight:400;font-size:12px">v4</span></h1>
   <div class="right">
     <span id="user" class="muted"></span>
     <button id="btnTheme" class="small" title="Modo oscuro">◐</button>
@@ -218,7 +218,7 @@ async function getToken(){
   try {
     return (await msalApp.acquireTokenSilent({ scopes: SCOPES, account: acc })).accessToken;
   } catch (e) {
-    if (e instanceof msal.InteractionRequiredAuthError) return (await msalApp.acquireTokenPopup({ scopes: SCOPES, account: acc })).accessToken;
+    if (e instanceof msal.InteractionRequiredAuthError) { await msalApp.acquireTokenRedirect({ scopes: SCOPES, account: acc }); return new Promise(() => {}); }
     throw e;
   }
 }
@@ -226,12 +226,11 @@ async function getToken(){
 $("btnLogin").onclick = async () => {
   hideMsg($("loginMsg"));
   try {
-    const r = await msalApp.loginPopup({ scopes: SCOPES });
-    msalApp.setActiveAccount(r.account);
-    start();
-  } catch (e) { showMsg($("loginMsg"), "err", "No se pudo iniciar sesión: " + (e.message || e)); }
+    $("btnLogin").disabled = true;
+    await msalApp.loginRedirect({ scopes: SCOPES, prompt: "select_account" });
+  } catch (e) { $("btnLogin").disabled = false; showMsg($("loginMsg"), "err", "No se pudo iniciar sesión: " + (e.message || e)); }
 };
-$("btnLogout").onclick = () => msalApp.logoutPopup({ account: account() }).then(() => location.reload());
+$("btnLogout").onclick = () => msalApp.logoutRedirect({ account: account() });
 
 /* ---------- Graph ---------- */
 async function graph(path, { method = "GET", body, session } = {}, retry = true){
@@ -466,8 +465,11 @@ $("fFecha").value = todayISO();
       cache: { cacheLocation: "localStorage" }
     });
     if (msalApp.initialize) await msalApp.initialize();
-    await msalApp.handleRedirectPromise();
   } catch (e) { return fail("Error al iniciar MSAL: " + (e.message || e)); }
+  try {
+    const r = await msalApp.handleRedirectPromise();   // vuelta del login de Microsoft
+    if (r && r.account) msalApp.setActiveAccount(r.account);
+  } catch (e) { show("vLogin"); showMsg($("loginMsg"), "err", "No se pudo iniciar sesión: " + (e.message || e)); return; }
   try { start(); } catch (e) { fail("Error al iniciar: " + (e.message || e)); }
 })();
 </script>
